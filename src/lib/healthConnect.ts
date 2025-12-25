@@ -38,13 +38,13 @@ export function isAndroid(): boolean {
 }
 
 /**
- * Request Health Connect permissions for blood pressure
+ * Request Health Connect permissions for blood pressure and heart rate
  */
 export async function requestHealthConnectPermissions(): Promise<boolean> {
   try {
     const result = await HealthConnect.requestHealthPermissions({
-      read: ['BloodPressure'],
-      write: ['BloodPressure'],
+      read: ['BloodPressure', 'HeartRateSeries'],
+      write: ['BloodPressure', 'HeartRateSeries'],
     });
     
     // Check if all requested permissions were granted
@@ -61,11 +61,11 @@ export async function requestHealthConnectPermissions(): Promise<boolean> {
 export async function checkHealthConnectPermissions(): Promise<boolean> {
   try {
     const result = await HealthConnect.checkHealthPermissions({
-      read: ['BloodPressure'],
-      write: ['BloodPressure'],
+      read: ['BloodPressure', 'HeartRateSeries'],
+      write: ['BloodPressure', 'HeartRateSeries'],
     });
     
-    // Check if write permission for BloodPressure is in granted permissions
+    // Check if write permissions are granted
     const hasWrite = result?.grantedPermissions?.includes('android.permission.health.WRITE_BLOOD_PRESSURE') ?? 
                      result?.hasAllPermissions ?? false;
     return hasWrite;
@@ -87,11 +87,14 @@ export async function openHealthConnectSettings(): Promise<void> {
 }
 
 /**
- * Write a blood pressure reading to Health Connect
+ * Write a blood pressure reading with heart rate to Health Connect
  */
 export async function writeBloodPressureToHealthConnect(reading: BloodPressureReading): Promise<boolean> {
   try {
-    const record: HealthRecord = {
+    const records: HealthRecord[] = [];
+    
+    // Blood pressure record
+    const bpRecord: HealthRecord = {
       type: 'BloodPressure',
       time: reading.timestamp,
       systolic: { unit: 'millimetersOfMercury', value: reading.systolic },
@@ -99,8 +102,26 @@ export async function writeBloodPressureToHealthConnect(reading: BloodPressureRe
       bodyPosition: 'sitting_down',
       measurementLocation: 'left_upper_arm',
     };
-    const result = await HealthConnect.insertRecords({ records: [record] });
-    console.log('Blood pressure written to Health Connect:', result);
+    records.push(bpRecord);
+
+    // Heart rate record (if available)
+    if (reading.heartRate && reading.heartRate > 0) {
+      const hrRecord: HealthRecord = {
+        type: 'HeartRateSeries',
+        startTime: reading.timestamp,
+        endTime: new Date(reading.timestamp.getTime() + 1000), // 1 second duration
+        samples: [
+          {
+            time: reading.timestamp,
+            beatsPerMinute: reading.heartRate,
+          },
+        ],
+      };
+      records.push(hrRecord);
+    }
+
+    const result = await HealthConnect.insertRecords({ records });
+    console.log('Blood pressure and heart rate written to Health Connect:', result);
     return true;
   } catch (error) {
     console.error('Failed to write to Health Connect:', error);
