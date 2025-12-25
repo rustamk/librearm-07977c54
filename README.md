@@ -35,6 +35,8 @@ npm install --legacy-peer-deps
 npm run dev
 ```
 
+> **Important:** After every `git pull`, run `npm install --legacy-peer-deps` again so newly-added native plugins (like Bluetooth LE) are present in `node_modules`.
+
 > **Note:** The `--legacy-peer-deps` flag is required because `capacitor-health-connect@0.7.0` has a peer dependency on Capacitor 5, while this project uses Capacitor 8. The package still works correctly with this flag.
 
 ## Building for Android
