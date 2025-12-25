@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Heart, ExternalLink, CheckCircle2, XCircle, Loader2, Smartphone } from 'lucide-react';
+import { Heart, ExternalLink, CheckCircle2, XCircle, Loader2, Smartphone, AlertTriangle, Settings } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useHealthConnect } from '@/hooks/useHealthConnect';
@@ -18,6 +18,7 @@ export function HealthConnectCard() {
     hasPermissions,
     syncEnabled,
     isSyncing,
+    permissionDenied,
     syncError,
     requestPermissions,
     openSettings,
@@ -133,8 +134,44 @@ export function HealthConnectCard() {
         </div>
       )}
 
-      {/* Setup prompt for available but no permissions */}
-      {isNative && isAvailable && !hasPermissions && (
+      {/* Permission denied - guide user to settings */}
+      {isNative && isAvailable && !hasPermissions && permissionDenied && (
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex items-start gap-2 rounded-lg bg-warning/10 p-3">
+            <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium text-foreground">
+                Permission Required
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Health Connect permissions were denied. To sync your readings, please grant access manually in Health Connect settings.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openSettings}
+              className="flex-1 gap-2"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Open Settings
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={requestPermissions}
+              className="flex-1"
+            >
+              Try Again
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Setup prompt for available but no permissions (first time) */}
+      {isNative && isAvailable && !hasPermissions && !permissionDenied && (
         <div className="mt-3 flex flex-col gap-2">
           <p className="text-xs text-muted-foreground">
             Sync blood pressure readings to Samsung Health or Google Fit
