@@ -16,6 +16,7 @@ export interface BloodPressureReading {
   heartRate: number;
   timestamp: Date;
   status: 'normal' | 'elevated' | 'high' | 'hypertensive';
+  syncedToHealthConnect?: boolean;
 }
 
 export interface DeviceState {
@@ -158,4 +159,20 @@ export function getStoredReadings(): BloodPressureReading[] {
 // Clear all stored readings
 export function clearStoredReadings(): void {
   localStorage.removeItem(READINGS_STORAGE_KEY);
+}
+
+// Mark a reading as synced to Health Connect
+export function markReadingAsSynced(timestamp: Date): void {
+  const readings = getStoredReadings();
+  const timestampMs = new Date(timestamp).getTime();
+  
+  const updated = readings.map(r => {
+    const readingTimestampMs = new Date(r.timestamp).getTime();
+    if (Math.abs(readingTimestampMs - timestampMs) < 1000) {
+      return { ...r, syncedToHealthConnect: true };
+    }
+    return r;
+  });
+  
+  localStorage.setItem(READINGS_STORAGE_KEY, JSON.stringify(updated));
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, ChevronDown, ChevronUp, Heart, Trash2 } from 'lucide-react';
+import { History, ChevronDown, ChevronUp, Heart, Trash2, Check } from 'lucide-react';
 import { BloodPressureReading, getStoredReadings, clearStoredReadings } from '@/lib/bluetooth';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const statusColors = {
   normal: 'bg-success',
@@ -100,6 +101,22 @@ export function ReadingHistory() {
                             <Heart className="h-3 w-3 text-heart" />
                             <span className="text-sm">{reading.heartRate}</span>
                           </div>
+                        )}
+
+                        {/* Sync Status */}
+                        {reading.syncedToHealthConnect && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success/20">
+                                  <Check className="h-3 w-3 text-success" />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Synced to Health Connect</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </motion.div>
                     ))}
