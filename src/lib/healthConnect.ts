@@ -11,8 +11,12 @@ const HEALTH_SYNC_ENABLED_KEY = 'librearm_health_sync_enabled';
  */
 export async function checkHealthConnectAvailability(): Promise<HealthConnectStatus> {
   try {
+    console.log('Checking Health Connect availability...');
     const result = await HealthConnect.checkAvailability();
-    switch (result.availability) {
+    console.log('Health Connect availability result:', JSON.stringify(result));
+    
+    const availability = result.availability;
+    switch (availability) {
       case 'Available':
         return 'available';
       case 'NotInstalled':
@@ -20,10 +24,11 @@ export async function checkHealthConnectAvailability(): Promise<HealthConnectSta
       case 'NotSupported':
         return 'not_supported';
       default:
+        console.log('Unknown availability status:', availability);
         return 'unknown';
     }
   } catch (error) {
-    console.log('Health Connect check failed:', error);
+    console.error('Health Connect check failed:', error);
     return 'unknown';
   }
 }
@@ -42,15 +47,22 @@ export function isAndroid(): boolean {
  */
 export async function requestHealthConnectPermissions(): Promise<boolean> {
   try {
+    console.log('Requesting Health Connect permissions...');
     const result = await HealthConnect.requestHealthPermissions({
       read: ['BloodPressure', 'HeartRateSeries'],
       write: ['BloodPressure', 'HeartRateSeries'],
     });
     
+    console.log('Health Connect permission result:', JSON.stringify(result));
+    
     // Check if all requested permissions were granted
-    return result?.hasAllPermissions ?? false;
+    return result?.grantedPermissions?.length > 0 || result?.hasAllPermissions === true;
   } catch (error) {
     console.error('Failed to request Health Connect permissions:', error);
+    // Show more details about the error
+    if (error instanceof Error) {
+      console.error('Error details:', error.message, error.stack);
+    }
     return false;
   }
 }
