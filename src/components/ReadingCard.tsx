@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Heart, Activity, TrendingUp, TrendingDown } from 'lucide-react';
+import { Heart, Activity, TrendingUp, TrendingDown, Check } from 'lucide-react';
 import { BloodPressureReading } from '@/lib/bluetooth';
 
 interface ReadingCardProps {
@@ -173,11 +173,23 @@ export function ReadingCard({ reading, inflationPressure = 0, isMeasuring = fals
           </div>
         </div>
 
-        {/* Timestamp */}
+        {/* Timestamp and Sync Status */}
         {reading?.timestamp && (
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            {new Date(reading.timestamp).toLocaleString()}
-          </p>
+          <div className="mt-4 flex flex-col items-center gap-1">
+            <p className="text-xs text-muted-foreground">
+              {new Date(reading.timestamp).toLocaleString()}
+            </p>
+            {reading.syncedToHealthConnect && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5"
+              >
+                <Check className="h-3 w-3 text-success" />
+                <span className="text-xs font-medium text-success">Synced to Health Connect</span>
+              </motion.div>
+            )}
+          </div>
         )}
       </div>
     </motion.div>
