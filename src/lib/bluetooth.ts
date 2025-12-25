@@ -2,7 +2,12 @@
 export const BLOOD_PRESSURE_SERVICE = '00001810-0000-1000-8000-00805f9b34fb';
 export const BLOOD_PRESSURE_MEASUREMENT_CHAR = '00002a35-0000-1000-8000-00805f9b34fb';
 export const BLOOD_PRESSURE_FEATURE_CHAR = '00002a49-0000-1000-8000-00805f9b34fb';
+// QardioArm vendor control characteristic (lives inside 0x1810 service)
 export const VENDOR_CONTROL_UUID = '583cb5b3-875d-40ed-9098-c39eb0c1983d';
+
+// Commands to control QardioArm (little-endian)
+export const START_MEASUREMENT_COMMAND = new Uint8Array([0xF1, 0x01]);
+export const CANCEL_MEASUREMENT_COMMAND = new Uint8Array([0xF1, 0x02]);
 
 export interface BloodPressureReading {
   systolic: number;
