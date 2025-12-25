@@ -36,8 +36,14 @@ export function classifyBloodPressure(systolic: number, diastolic: number): Bloo
 }
 
 // Parse blood pressure measurement from BLE characteristic value
+// Returns partial reading - diastolic > 0 indicates complete measurement
 export function parseBloodPressureMeasurement(dataView: DataView): Partial<BloodPressureReading> | null {
   try {
+    if (dataView.byteLength < 7) {
+      console.log('Data too short:', dataView.byteLength);
+      return null;
+    }
+
     const flags = dataView.getUint8(0);
     const hasTimestamp = (flags & 0x02) !== 0;
     const hasPulseRate = (flags & 0x04) !== 0;
@@ -58,21 +64,25 @@ export function parseBloodPressureMeasurement(dataView: DataView): Partial<Blood
 
     // Read pulse rate if present
     let heartRate = 0;
-    if (hasPulseRate) {
+    if (hasPulseRate && dataView.byteLength >= offset + 2) {
       heartRate = parseSFLOAT(dataView, offset);
     }
 
-    // Validate readings
-    if (systolic <= 0 || diastolic <= 0 || systolic < diastolic) {
+    console.log('Parsed values - sys:', systolic, 'dia:', diastolic, 'map:', meanArterialPressure, 'hr:', heartRate);
+
+    // During inflation, systolic shows cuff pressure and diastolic is 0
+    // A complete reading has both systolic and diastolic > 0
+    if (systolic <= 0 || !isFinite(systolic)) {
       return null;
     }
 
+    // Return the reading - caller checks if diastolic > 0 for completion
     return {
       systolic: Math.round(systolic),
-      diastolic: Math.round(diastolic),
-      meanArterialPressure: Math.round(meanArterialPressure),
-      heartRate: Math.round(heartRate),
-      status: classifyBloodPressure(systolic, diastolic),
+      diastolic: Math.round(Math.max(0, diastolic)),
+      meanArterialPressure: Math.round(Math.max(0, meanArterialPressure)),
+      heartRate: Math.round(Math.max(0, heartRate)),
+      status: diastolic > 0 ? classifyBloodPressure(systolic, diastolic) : 'normal',
     };
   } catch (error) {
     console.error('Failed to parse blood pressure measurement:', error);
