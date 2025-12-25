@@ -25,6 +25,8 @@ export interface UseHealthConnectReturn {
   syncEnabled: boolean;
   /** Whether we're currently syncing */
   isSyncing: boolean;
+  /** Whether permission was denied after request attempt */
+  permissionDenied: boolean;
   /** Last sync error message */
   syncError: string | null;
   /** Request permissions from user */
@@ -44,6 +46,7 @@ export function useHealthConnect(): UseHealthConnectReturn {
   const [hasPermissions, setHasPermissions] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isAndroidPlatform] = useState(() => isAndroid());
 
@@ -72,12 +75,17 @@ export function useHealthConnect(): UseHealthConnectReturn {
 
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     setSyncError(null);
+    setPermissionDenied(false);
     const granted = await requestHealthConnectPermissions();
     setHasPermissions(granted);
     
     if (granted) {
       setHealthSyncEnabled(true);
       setSyncEnabled(true);
+      setPermissionDenied(false);
+    } else {
+      // Permission was denied - user needs to grant manually in settings
+      setPermissionDenied(true);
     }
     
     return granted;
@@ -138,6 +146,7 @@ export function useHealthConnect(): UseHealthConnectReturn {
     hasPermissions,
     syncEnabled,
     isSyncing,
+    permissionDenied,
     syncError,
     requestPermissions,
     syncReading,
