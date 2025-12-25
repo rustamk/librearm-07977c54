@@ -1,12 +1,19 @@
-import { BleClient, BleDevice, numberToUUID } from '@capacitor-community/bluetooth-le';
 import {
   BLOOD_PRESSURE_SERVICE,
   BLOOD_PRESSURE_MEASUREMENT_CHAR,
   VENDOR_CONTROL_UUID,
   parseBloodPressureMeasurement,
   BloodPressureReading,
-  classifyBloodPressure,
 } from './bluetooth';
+
+// Dynamic import for Capacitor BLE plugin (only available in native environment)
+let BleClient: any = null;
+
+// Type for BLE device
+export interface BleDevice {
+  deviceId: string;
+  name?: string;
+}
 
 let isInitialized = false;
 let connectedDevice: BleDevice | null = null;
@@ -20,10 +27,31 @@ export function isNativeApp(): boolean {
 }
 
 /**
+ * Load the BLE plugin dynamically
+ */
+async function loadBlePlugin(): Promise<boolean> {
+  if (BleClient) return true;
+  if (!isNativeApp()) return false;
+  
+  try {
+    const module = await import('@capacitor-community/bluetooth-le');
+    BleClient = module.BleClient;
+    return true;
+  } catch (error) {
+    console.error('Failed to load BLE plugin:', error);
+    return false;
+  }
+}
+
+/**
  * Initialize BLE client
  */
 export async function initializeBle(): Promise<boolean> {
   if (isInitialized) return true;
+  if (!isNativeApp()) return false;
+  
+  const loaded = await loadBlePlugin();
+  if (!loaded) return false;
   
   try {
     await BleClient.initialize({ androidNeverForLocation: true });
@@ -40,8 +68,9 @@ export async function initializeBle(): Promise<boolean> {
  * Request BLE permissions (Android)
  */
 export async function requestBlePermissions(): Promise<boolean> {
+  if (!BleClient) return false;
+  
   try {
-    // On Android 12+, we need BLUETOOTH_SCAN and BLUETOOTH_CONNECT
     await BleClient.requestLEScan({ services: [] }, () => {});
     await BleClient.stopLEScan();
     return true;
@@ -59,7 +88,7 @@ export async function isBleAvailable(): Promise<boolean> {
   
   try {
     const initialized = await initializeBle();
-    if (!initialized) return false;
+    if (!initialized || !BleClient) return false;
     
     const enabled = await BleClient.isEnabled();
     return enabled;
@@ -76,7 +105,10 @@ export async function scanForDevices(
   onDeviceFound: (device: BleDevice) => void,
   timeoutMs: number = 10000
 ): Promise<void> {
-  await initializeBle();
+  const initialized = await initializeBle();
+  if (!initialized || !BleClient) {
+    throw new Error('BLE not available');
+  }
   
   const devices = new Set<string>();
   
@@ -85,7 +117,7 @@ export async function scanForDevices(
       services: [BLOOD_PRESSURE_SERVICE],
       namePrefix: 'Qardio',
     },
-    (result) => {
+    (result: any) => {
       if (result.device && !devices.has(result.device.deviceId)) {
         devices.add(result.device.deviceId);
         console.log('Found device:', result.device.name, result.device.deviceId);
@@ -108,6 +140,8 @@ export async function scanForDevices(
  * Stop scanning
  */
 export async function stopScan(): Promise<void> {
+  if (!BleClient) return;
+  
   try {
     await BleClient.stopLEScan();
   } catch (e) {
@@ -123,9 +157,10 @@ export async function connectToDevice(
   onDisconnect?: () => void
 ): Promise<boolean> {
   try {
-    await initializeBle();
+    const initialized = await initializeBle();
+    if (!initialized || !BleClient) return false;
     
-    await BleClient.connect(deviceId, (disconnectedDeviceId) => {
+    await BleClient.connect(deviceId, (disconnectedDeviceId: string) => {
       console.log('Device disconnected:', disconnectedDeviceId);
       connectedDevice = null;
       onDisconnect?.();
@@ -144,7 +179,7 @@ export async function connectToDevice(
  * Disconnect from device
  */
 export async function disconnectDevice(): Promise<void> {
-  if (connectedDevice) {
+  if (connectedDevice && BleClient) {
     try {
       await BleClient.disconnect(connectedDevice.deviceId);
     } catch (e) {
@@ -161,11 +196,13 @@ export async function subscribeToMeasurements(
   deviceId: string,
   onMeasurement: (reading: Partial<BloodPressureReading>) => void
 ): Promise<void> {
+  if (!BleClient) throw new Error('BLE not available');
+  
   await BleClient.startNotifications(
     deviceId,
     BLOOD_PRESSURE_SERVICE,
     BLOOD_PRESSURE_MEASUREMENT_CHAR,
-    (value) => {
+    (value: DataView) => {
       console.log('Received BLE data:', value.byteLength, 'bytes');
       const dataView = new DataView(value.buffer);
       const reading = parseBloodPressureMeasurement(dataView);
@@ -180,6 +217,8 @@ export async function subscribeToMeasurements(
  * Unsubscribe from measurements
  */
 export async function unsubscribeFromMeasurements(deviceId: string): Promise<void> {
+  if (!BleClient) return;
+  
   try {
     await BleClient.stopNotifications(
       deviceId,
@@ -198,6 +237,8 @@ export async function writeControlCommand(
   deviceId: string,
   command: Uint8Array
 ): Promise<boolean> {
+  if (!BleClient) return false;
+  
   try {
     await BleClient.write(
       deviceId,
