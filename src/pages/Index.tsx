@@ -81,7 +81,7 @@ const Index = () => {
                 <ol className="mt-2 space-y-1 text-xs text-muted-foreground">
                   <li>1. Connect to your QardioArm device above</li>
                   <li>2. Wrap the cuff around your upper arm</li>
-                  <li>3. Press the button on the QardioArm to start</li>
+                  <li>3. Tap "Start Measurement" below to begin</li>
                   <li>4. Remain still until the measurement completes</li>
                 </ol>
               </div>
