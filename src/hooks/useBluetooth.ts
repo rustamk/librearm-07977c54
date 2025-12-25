@@ -193,9 +193,19 @@ export function useBluetooth() {
         clearTimeout(timeoutRef.current);
       }
 
-      const errorMessage = error.message?.includes('cancelled')
-        ? 'Connection cancelled by user'
-        : error.message || 'Failed to connect to device';
+      let errorMessage = 'Failed to connect to device';
+      
+      if (error.message?.includes('cancelled') || error.message?.includes('cancel')) {
+        errorMessage = 'Connection cancelled by user';
+      } else if (error.message?.includes('auth') || error.message?.includes('Authentication')) {
+        errorMessage = 'Authentication failed. Please pair the device in your Bluetooth settings first, then try again.';
+      } else if (error.message?.includes('not found') || error.message?.includes('No device')) {
+        errorMessage = 'Device not found. Make sure QardioArm is turned on and nearby.';
+      } else if (error.message?.includes('denied') || error.message?.includes('permission')) {
+        errorMessage = 'Bluetooth permission denied. Please allow Bluetooth access.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
 
       setDeviceState(prev => ({
         ...prev,
