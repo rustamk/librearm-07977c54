@@ -14,7 +14,6 @@ import {
 } from '@/lib/bluetooth';
 import {
   isNativeApp,
-  initializeBle,
   isBleAvailable,
   scanForDevices,
   stopScan,
@@ -23,9 +22,8 @@ import {
   subscribeToMeasurements,
   unsubscribeFromMeasurements,
   writeControlCommand,
-  getConnectedDevice,
+  type BleDevice,
 } from '@/lib/nativeBluetooth';
-import type { BleDevice } from '@capacitor-community/bluetooth-le';
 
 const CONNECTION_TIMEOUT = 30000; // 30 seconds
 const MEASUREMENT_TIMEOUT = 120000; // 2 minutes for measurement
