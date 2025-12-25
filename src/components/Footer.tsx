@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Github, Shield, ExternalLink, FileText } from 'lucide-react';
+import { Github, Shield, ExternalLink, FileText, Scale } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function Footer() {
@@ -21,13 +21,20 @@ export function Footer() {
         </div>
 
         {/* Links */}
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
             to="/privacy"
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <FileText className="h-4 w-4" />
-            Privacy Policy
+            Privacy
+          </Link>
+          <Link
+            to="/terms"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Scale className="h-4 w-4" />
+            Terms
           </Link>
           <a
             href="https://github.com/ptylr/LibreArm"
@@ -36,7 +43,7 @@ export function Footer() {
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <Github className="h-4 w-4" />
-            Open Source
+            Source
             <ExternalLink className="h-3 w-3" />
           </a>
         </div>
