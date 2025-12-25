@@ -6,6 +6,7 @@ import { BluetoothWarning } from '@/components/BluetoothWarning';
 import { ReadingCard } from '@/components/ReadingCard';
 import { ReadingHistory } from '@/components/ReadingHistory';
 import { MeasureButton } from '@/components/MeasureButton';
+import { HealthConnectCard } from '@/components/HealthConnectCard';
 import { useBluetooth } from '@/hooks/useBluetooth';
 import { Helmet } from 'react-helmet-async';
 
@@ -65,6 +66,9 @@ const Index = () => {
               onStart={startMeasurement}
               onStop={stopMeasurement}
             />
+
+            {/* Health Connect Sync */}
+            <HealthConnectCard />
 
             {/* Reading History */}
             <ReadingHistory />
