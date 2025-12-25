@@ -55,13 +55,13 @@ export function BluetoothWarning() {
             <div className="text-xs text-muted-foreground space-y-1">
               <p>Before connecting, you must pair your QardioArm in your device's Bluetooth settings:</p>
               <ol className="list-decimal list-inside space-y-0.5 ml-1">
-                <li>Turn on your QardioArm (press the button)</li>
+                <li>Power on your QardioArm</li>
                 <li>Open <strong>Settings → Bluetooth</strong> on your phone/computer</li>
                 <li>Find and pair "QardioArm" from available devices</li>
                 <li>Return here and click "Connect to QardioArm"</li>
               </ol>
               <p className="pt-1 text-muted-foreground/80">
-                <strong>If pairing fails:</strong> Hold the QardioArm button for 10+ seconds to reset, then try again.
+                <strong>If pairing fails:</strong> Ensure the device is powered on and in range, then try again.
               </p>
             </div>
           </div>
