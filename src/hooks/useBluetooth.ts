@@ -4,6 +4,9 @@ import {
   BloodPressureReading,
   BLOOD_PRESSURE_SERVICE,
   BLOOD_PRESSURE_MEASUREMENT_CHAR,
+  VENDOR_CONTROL_UUID,
+  START_MEASUREMENT_COMMAND,
+  CANCEL_MEASUREMENT_COMMAND,
   parseBloodPressureMeasurement,
   classifyBloodPressure,
   isWebBluetoothAvailable,
@@ -11,6 +14,7 @@ import {
 } from '@/lib/bluetooth';
 
 const CONNECTION_TIMEOUT = 30000; // 30 seconds
+const MEASUREMENT_TIMEOUT = 120000; // 2 minutes for measurement
 
 export function useBluetooth() {
   const [deviceState, setDeviceState] = useState<DeviceState>({
@@ -27,8 +31,10 @@ export function useBluetooth() {
 
   // Using any for Web Bluetooth types as they're not in standard TypeScript lib
   const deviceRef = useRef<any>(null);
-  const characteristicRef = useRef<any>(null);
+  const measurementCharRef = useRef<any>(null);
+  const controlCharRef = useRef<any>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const measurementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearError = useCallback(() => {
     setDeviceState(prev => ({ ...prev, error: null }));
@@ -38,10 +44,13 @@ export function useBluetooth() {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+    if (measurementTimeoutRef.current) {
+      clearTimeout(measurementTimeoutRef.current);
+    }
 
-    if (characteristicRef.current) {
+    if (measurementCharRef.current) {
       try {
-        await characteristicRef.current.stopNotifications();
+        await measurementCharRef.current.stopNotifications();
       } catch (e) {
         console.log('Error stopping notifications:', e);
       }
@@ -52,7 +61,8 @@ export function useBluetooth() {
     }
 
     deviceRef.current = null;
-    characteristicRef.current = null;
+    measurementCharRef.current = null;
+    controlCharRef.current = null;
 
     setDeviceState({
       isConnected: false,
@@ -72,10 +82,19 @@ export function useBluetooth() {
     
     if (!value) return;
 
+    console.log('Received measurement data, length:', value.byteLength);
+
     const reading = parseBloodPressureMeasurement(value);
     
-    if (reading && reading.systolic && reading.diastolic) {
-      // Valid complete reading
+    if (reading && reading.systolic && reading.diastolic && reading.diastolic > 0) {
+      // Valid complete reading (diastolic > 0 means measurement is done)
+      console.log('Valid reading received:', reading);
+      
+      // Clear measurement timeout
+      if (measurementTimeoutRef.current) {
+        clearTimeout(measurementTimeoutRef.current);
+      }
+
       const fullReading: BloodPressureReading = {
         systolic: reading.systolic,
         diastolic: reading.diastolic,
@@ -89,16 +108,10 @@ export function useBluetooth() {
       saveReading(fullReading);
       setDeviceState(prev => ({ ...prev, isMeasuring: false }));
       setInflationPressure(0);
-    } else if (value.byteLength >= 3) {
-      // Possibly inflation pressure update
-      try {
-        const pressure = value.getUint8(1) | (value.getUint8(2) << 8);
-        if (pressure > 0 && pressure < 300) {
-          setInflationPressure(pressure);
-        }
-      } catch (e) {
-        console.log('Error reading inflation pressure');
-      }
+    } else if (reading && reading.systolic) {
+      // Intermediate reading during inflation - show cuff pressure
+      console.log('Inflation pressure:', reading.systolic);
+      setInflationPressure(reading.systolic);
     }
   }, []);
 
@@ -157,12 +170,22 @@ export function useBluetooth() {
       const service = await server.getPrimaryService(BLOOD_PRESSURE_SERVICE);
       
       // Get Blood Pressure Measurement characteristic
-      const characteristic = await service.getCharacteristic(BLOOD_PRESSURE_MEASUREMENT_CHAR);
-      characteristicRef.current = characteristic;
+      const measurementChar = await service.getCharacteristic(BLOOD_PRESSURE_MEASUREMENT_CHAR);
+      measurementCharRef.current = measurementChar;
 
-      // Start notifications
-      await characteristic.startNotifications();
-      characteristic.addEventListener('characteristicvaluechanged', handleMeasurement);
+      // Try to get the vendor control characteristic
+      try {
+        const controlChar = await service.getCharacteristic(VENDOR_CONTROL_UUID);
+        controlCharRef.current = controlChar;
+        console.log('Control characteristic found - can trigger measurements from app');
+      } catch (e) {
+        console.log('Control characteristic not found - device may need physical button');
+        controlCharRef.current = null;
+      }
+
+      // Start notifications for measurement characteristic
+      await measurementChar.startNotifications();
+      measurementChar.addEventListener('characteristicvaluechanged', handleMeasurement);
 
       // Handle disconnect
       device.addEventListener('gattserverdisconnected', () => {
@@ -216,15 +239,85 @@ export function useBluetooth() {
     }
   }, [disconnect, handleMeasurement]);
 
-  const startMeasurement = useCallback(() => {
-    setDeviceState(prev => ({ ...prev, isMeasuring: true }));
+  const startMeasurement = useCallback(async () => {
+    if (!controlCharRef.current) {
+      setDeviceState(prev => ({
+        ...prev,
+        error: 'Control characteristic not available. Cannot start measurement.',
+      }));
+      return;
+    }
+
+    setDeviceState(prev => ({ ...prev, isMeasuring: true, error: null }));
     setCurrentReading(null);
     setInflationPressure(0);
-    // The actual measurement is triggered by the QardioArm device button
-    // We just update the UI state to show we're ready
+
+    try {
+      // Send start command to QardioArm
+      console.log('Sending start measurement command...');
+      await controlCharRef.current.writeValue(START_MEASUREMENT_COMMAND);
+      console.log('Start command sent successfully');
+
+      // Set measurement timeout (2 minutes)
+      measurementTimeoutRef.current = setTimeout(() => {
+        setDeviceState(prev => ({
+          ...prev,
+          isMeasuring: false,
+          error: 'Measurement timed out. Please try again.',
+        }));
+        setInflationPressure(0);
+      }, MEASUREMENT_TIMEOUT);
+
+    } catch (error: any) {
+      console.error('Failed to start measurement:', error);
+      
+      // Try writeWithoutResponse as fallback
+      try {
+        console.log('Trying writeWithoutResponse...');
+        await controlCharRef.current.writeValueWithoutResponse(START_MEASUREMENT_COMMAND);
+        console.log('Start command sent via writeWithoutResponse');
+        
+        // Set measurement timeout
+        measurementTimeoutRef.current = setTimeout(() => {
+          setDeviceState(prev => ({
+            ...prev,
+            isMeasuring: false,
+            error: 'Measurement timed out. Please try again.',
+          }));
+          setInflationPressure(0);
+        }, MEASUREMENT_TIMEOUT);
+        
+      } catch (fallbackError: any) {
+        console.error('Fallback also failed:', fallbackError);
+        setDeviceState(prev => ({
+          ...prev,
+          isMeasuring: false,
+          error: `Failed to start measurement: ${error.message || 'Unknown error'}`,
+        }));
+      }
+    }
   }, []);
 
-  const stopMeasurement = useCallback(() => {
+  const stopMeasurement = useCallback(async () => {
+    if (measurementTimeoutRef.current) {
+      clearTimeout(measurementTimeoutRef.current);
+    }
+
+    if (controlCharRef.current) {
+      try {
+        console.log('Sending cancel measurement command...');
+        await controlCharRef.current.writeValue(CANCEL_MEASUREMENT_COMMAND);
+        console.log('Cancel command sent successfully');
+      } catch (error) {
+        // Try writeWithoutResponse as fallback
+        try {
+          await controlCharRef.current.writeValueWithoutResponse(CANCEL_MEASUREMENT_COMMAND);
+        } catch (e) {
+          console.log('Error sending cancel command:', e);
+        }
+      }
+    }
+
     setDeviceState(prev => ({ ...prev, isMeasuring: false }));
     setInflationPressure(0);
   }, []);
