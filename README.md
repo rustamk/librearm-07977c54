@@ -2,63 +2,91 @@
 
 Open-source blood pressure monitoring app that connects to Bluetooth blood pressure monitors and optionally syncs readings to Android Health Connect.
 
-## Features
+## Platform Support & Features
 
-- 📱 Connect to Bluetooth blood pressure monitors
-- 📊 Track and visualize BP trends over time
-- ❤️ Monitor heart rate alongside blood pressure
-- 🔄 Sync readings to Android Health Connect (optional)
-- 📤 Export readings to CSV
-- 🔒 Privacy-focused - all data stored locally
+| Feature | Web Browser | Native Android App |
+|---------|-------------|-------------------|
+| View BP history & trends | ✅ | ✅ |
+| Export to CSV/PDF | ✅ | ✅ |
+| Bluetooth BP monitor connection | ⚠️ Chrome/Edge only* | ✅ Full support |
+| Health Connect sync | ❌ Not available | ✅ Full support |
+| Install to home screen | ✅ PWA | ✅ APK install |
 
-## Local Development
+> **\*Web Bluetooth Note:** Bluetooth connections in the browser only work on Chrome, Edge, and Opera on desktop (Windows/Mac/Linux) and Chrome on Android. iOS Safari does not support Web Bluetooth.
 
-### Prerequisites
+---
 
-- Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-- Android Studio (for Android builds)
-- JDK 17
+## Web Browser Usage
 
-### Installation
+### Running in Browser (Development)
 
 ```sh
 # Clone the repository
 git clone <YOUR_GIT_URL>
+cd librearm
 
-# Navigate to the project directory
-cd <YOUR_PROJECT_NAME>
-
-# Install dependencies (use --legacy-peer-deps due to Health Connect package compatibility)
+# Install dependencies
 npm install --legacy-peer-deps
 
-# Start the development server
+# Start development server
 npm run dev
 ```
 
-> **Important:** After every `git pull`, run `npm install --legacy-peer-deps` again so newly-added native plugins (like Bluetooth LE) are present in `node_modules`.
+Open `http://localhost:5173` in **Chrome** or **Edge** for Bluetooth support.
 
-> **Note:** The `--legacy-peer-deps` flag is required because `capacitor-health-connect@0.7.0` has a peer dependency on Capacitor 5, while this project uses Capacitor 8. The package still works correctly with this flag.
+### Browser Limitations
 
-## Building for Android
+- **Bluetooth:** Only works on Chrome/Edge/Opera. Not supported on Firefox or Safari.
+- **Health Connect:** Not available in browser - requires native Android app.
+- **iOS:** Web Bluetooth is not supported on any iOS browser.
 
-### First-time Setup
+---
 
-After cloning, you need to add the Android platform and configure it:
+## Native Android App (Recommended)
+
+The native Android app provides full functionality including reliable Bluetooth and Health Connect integration.
+
+### Prerequisites
+
+- **Node.js 18+** - [install with nvm](https://github.com/nvm-sh/nvm)
+- **Android Studio** - [download here](https://developer.android.com/studio)
+- **JDK 17** (bundled with Android Studio)
+- **Android SDK 35** (install via Android Studio SDK Manager)
+- **Physical Android device or emulator** running Android 8.0+ (API 26+)
+
+### Step 1: Clone and Install
 
 ```sh
+# Clone the repository
+git clone <YOUR_GIT_URL>
+cd librearm
+
+# Install dependencies (required flag for Health Connect compatibility)
+npm install --legacy-peer-deps
+
 # Build the web app
 npm run build
+```
 
-# Add Android platform (first time only)
+> **Important:** After every `git pull`, run `npm install --legacy-peer-deps` to ensure all native plugins are installed.
+
+### Step 2: Add Android Platform (First Time Only)
+
+```sh
+# Add Android platform
 npx cap add android
 
-# Sync with native platforms
+# Initial sync
 npx cap sync android
 ```
 
-### Required Android Configuration
+### Step 3: Configure Android Project
 
-#### 1. Update `android/variables.gradle`
+After adding the Android platform, you **must** configure these files:
+
+#### 3.1 Update `android/variables.gradle`
+
+Replace the entire contents with:
 
 ```gradle
 ext {
@@ -79,9 +107,9 @@ ext {
 }
 ```
 
-#### 2. Update `android/build.gradle`
+#### 3.2 Update `android/build.gradle`
 
-Add this at the bottom of the file (after `allprojects`):
+Add this block at the **bottom** of the file (after `allprojects`):
 
 ```gradle
 subprojects {
@@ -127,12 +155,14 @@ gradle.projectsEvaluated {
 }
 ```
 
-#### 3. Update `android/app/build.gradle`
+#### 3.3 Update `android/app/build.gradle`
 
-Ensure Java 17 compatibility:
+Ensure Java 17 compatibility in the `android` block:
 
 ```gradle
 android {
+    // ... existing config ...
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -140,9 +170,11 @@ android {
 }
 ```
 
-#### 4. Update `android/app/src/main/AndroidManifest.xml`
+#### 3.4 Update `android/app/src/main/AndroidManifest.xml`
 
-Add these permissions before the `<application>` tag:
+This is the complete manifest configuration needed for Bluetooth and Health Connect:
+
+**Add permissions** (before `<application>` tag):
 
 ```xml
 <!-- Bluetooth permissions -->
@@ -158,7 +190,7 @@ Add these permissions before the `<application>` tag:
 <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
 ```
 
-Add Health Connect visibility query inside `<manifest>`:
+**Add Health Connect visibility query** (inside `<manifest>`, before `<application>`):
 
 ```xml
 <queries>
@@ -166,21 +198,26 @@ Add Health Connect visibility query inside `<manifest>`:
 </queries>
 ```
 
-Add Health Connect intent filter inside `<application>`:
+**Add Health Connect intent filter** (inside the main `<activity>` for MainActivity):
 
 ```xml
-<activity
-    android:name="androidx.health.connect.client.PermissionController$PermissionRequestActivity"
-    android:exported="true">
+<activity android:name=".MainActivity" ...>
+    <!-- existing intent-filters -->
+    
+    <!-- Health Connect permissions rationale -->
     <intent-filter>
         <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
     </intent-filter>
 </activity>
+```
 
+**Add activity-alias for Android 14+** (inside `<application>`, after MainActivity):
+
+```xml
 <activity-alias
     android:name="ViewPermissionUsageActivity"
     android:exported="true"
-    android:targetActivity="androidx.health.connect.client.PermissionController$PermissionRequestActivity"
+    android:targetActivity=".MainActivity"
     android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
     <intent-filter>
         <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
@@ -189,56 +226,108 @@ Add Health Connect intent filter inside `<application>`:
 </activity-alias>
 ```
 
-#### 5. Set JAVA_HOME
+#### 3.5 Set JAVA_HOME Environment Variable
 
-Make sure JAVA_HOME points to JDK 17:
-
-**Windows (PowerShell as Admin):**
+**Windows (PowerShell as Administrator):**
 ```powershell
-[System.Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
+[System.Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\\Program Files\\Android\\Android Studio\\jbr\", "User")
 ```
 
-**macOS/Linux:**
+**macOS:**
 ```sh
-export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+# Add to ~/.zshrc or ~/.bash_profile for persistence
 ```
 
-### Building and Running
+**Linux:**
+```sh
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+# Add to ~/.bashrc for persistence
+```
+
+### Step 4: Build and Run
 
 ```sh
 # Build web app
 npm run build
 
-# Sync changes
+# Sync to Android
 npx cap sync android
 
-# Clean and build (recommended after config changes)
-cd android
-./gradlew clean
-cd ..
+# Clean build (recommended after config changes)
+cd android && ./gradlew clean && cd ..
 
-# Run on device/emulator
+# Run on connected device or emulator
 npx cap run android
 ```
 
-### APK Location
+### Step 5: Install Health Connect (Required for Sync)
 
-After building, the APK is located at:
-- Debug: `android/app/build/outputs/apk/debug/app-debug.apk`
-- Release: `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+On your Android device/emulator:
+1. Open Google Play Store
+2. Search for "Health Connect by Google"
+3. Install the app
+4. Open LibreArm and enable Health Connect sync
+
+---
+
+## Updating After Git Pull
+
+After pulling new changes from the repository:
+
+```sh
+git pull
+npm install --legacy-peer-deps
+npm run build
+npx cap sync android
+```
+
+---
+
+## APK Build Locations
+
+After building with Android Studio or `./gradlew assembleDebug`:
+
+| Build Type | Location |
+|------------|----------|
+| Debug APK | `android/app/build/outputs/apk/debug/app-debug.apk` |
+| Release APK | `android/app/build/outputs/apk/release/app-release-unsigned.apk` |
+
+---
+
+## Troubleshooting
+
+### Health Connect permissions denied immediately
+
+If tapping "Enable Sync" doesn't show the permission dialog:
+1. Ensure Health Connect app is installed from Play Store
+2. Verify AndroidManifest.xml has all the intent-filters listed above
+3. Clean and rebuild: `cd android && ./gradlew clean && cd .. && npx cap sync android`
+4. Check logcat for errors: `adb logcat | grep -i health`
+
+### Bluetooth not finding devices
+
+- **In Browser:** Ensure you're using Chrome/Edge. Firefox and Safari don't support Web Bluetooth.
+- **Native App:** Ensure Bluetooth permissions are granted in Android Settings → Apps → LibreArm → Permissions.
+
+### Build errors with Kotlin/JVM version
+
+1. Verify JAVA_HOME points to JDK 17
+2. Ensure `android/build.gradle` has the subprojects block with JVM 17 config
+3. Run `cd android && ./gradlew clean && cd ..`
+
+---
 
 ## Technologies
 
-- React + TypeScript + Vite
-- Tailwind CSS + shadcn/ui
-- Capacitor for native mobile
-- @capacitor-community/bluetooth-le for native Bluetooth
-- capacitor-health-connect for Health Connect integration
-- Recharts for data visualization
+- **Frontend:** React + TypeScript + Vite
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Native:** Capacitor 8
+- **Bluetooth:** @capacitor-community/bluetooth-le (native), Web Bluetooth API (browser)
+- **Health:** capacitor-health-connect
+- **Charts:** Recharts
 
-## Deployment
-
-Open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click Share → Publish.
+---
 
 ## License
 
