@@ -42,13 +42,15 @@ export interface UseHealthConnectReturn {
 }
 
 export function useHealthConnect(): UseHealthConnectReturn {
+  // Compute platform check once, outside of useState to avoid React hook issues
+  const isAndroidPlatform = isAndroid();
+  
   const [status, setStatus] = useState<HealthConnectStatus>('unknown');
   const [hasPermissions, setHasPermissions] = useState(false);
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [isAndroidPlatform] = useState(() => isAndroid());
 
   const isAvailable = status === 'available';
 
