@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Github, Shield, ExternalLink, FileText, Scale } from 'lucide-react';
+import { Github, Shield, ExternalLink, FileText, Scale, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function Footer() {
@@ -22,6 +22,13 @@ export function Footer() {
 
         {/* Links */}
         <div className="flex items-center justify-center gap-4 flex-wrap">
+          <Link
+            to="/about"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Info className="h-4 w-4" />
+            About
+          </Link>
           <Link
             to="/privacy"
             className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
