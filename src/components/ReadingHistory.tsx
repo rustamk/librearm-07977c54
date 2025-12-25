@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, ChevronDown, ChevronUp, Heart, Trash2, Check } from 'lucide-react';
+import { History, ChevronDown, ChevronUp, Heart, Trash2, Check, Download, FileText } from 'lucide-react';
 import { BloodPressureReading, getStoredReadings, clearStoredReadings } from '@/lib/bluetooth';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
+import { exportToCSV, exportToPDF } from '@/lib/export';
+import { Button } from '@/components/ui/button';
 const statusColors = {
   normal: 'bg-success',
   elevated: 'bg-warning',
@@ -123,7 +124,30 @@ export function ReadingHistory() {
                   </div>
 
                   {readings.length > 0 && (
-                    <div className="border-t border-border p-3">
+                    <div className="flex flex-col gap-2 border-t border-border p-3">
+                      {/* Export buttons */}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportToCSV(readings)}
+                          className="flex-1 gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Export CSV
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => exportToPDF(readings)}
+                          className="flex-1 gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Export PDF
+                        </Button>
+                      </div>
+                      
+                      {/* Clear button */}
                       <button
                         onClick={handleClearHistory}
                         className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
