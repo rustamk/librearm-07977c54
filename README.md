@@ -1,73 +1,65 @@
-# Welcome to your Lovable project
+# LibreArm
 
-## Project info
+Open-source blood pressure monitoring app that connects to Bluetooth blood pressure monitors and optionally syncs readings to Android Health Connect.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- 📱 Connect to Bluetooth blood pressure monitors
+- 📊 Track and visualize BP trends over time
+- ❤️ Monitor heart rate alongside blood pressure
+- 🔄 Sync readings to Android Health Connect (optional)
+- 📤 Export readings to CSV
+- 🔒 Privacy-focused - all data stored locally
 
-There are several ways of editing your application.
+## Local Development
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Installation
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
+# Navigate to the project directory
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies (use --legacy-peer-deps due to Health Connect package compatibility)
+npm install --legacy-peer-deps
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+> **Note:** The `--legacy-peer-deps` flag is required because `capacitor-health-connect@0.7.0` has a peer dependency on Capacitor 5, while this project uses Capacitor 8. The package still works correctly with this flag.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Building for Android
 
-**Use GitHub Codespaces**
+```sh
+# Build the web app
+npm run build
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Sync with native platforms
+npx cap sync
 
-## What technologies are used for this project?
+# Run on Android
+npx cap run android
+```
 
-This project is built with:
+## Technologies
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- React + TypeScript + Vite
+- Tailwind CSS + shadcn/ui
+- Capacitor for native mobile
+- Recharts for data visualization
+- Web Bluetooth API
 
-## How can I deploy this project?
+## Deployment
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click Share → Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## License
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Open source - see LICENSE for details.
