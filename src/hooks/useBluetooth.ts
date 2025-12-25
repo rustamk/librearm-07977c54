@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   DeviceState,
   BloodPressureReading,
@@ -16,7 +16,12 @@ import {
 const CONNECTION_TIMEOUT = 30000; // 30 seconds
 const MEASUREMENT_TIMEOUT = 120000; // 2 minutes for measurement
 
-export function useBluetooth() {
+interface UseBluetoothOptions {
+  onReadingComplete?: (reading: BloodPressureReading) => void;
+}
+
+export function useBluetooth(options: UseBluetoothOptions = {}) {
+  const { onReadingComplete } = options;
   const [deviceState, setDeviceState] = useState<DeviceState>({
     isConnected: false,
     isConnecting: false,
@@ -76,6 +81,12 @@ export function useBluetooth() {
     setInflationPressure(0);
   }, []);
 
+  // Store the callback in a ref so it doesn't cause re-renders
+  const onReadingCompleteRef = useRef(onReadingComplete);
+  useEffect(() => {
+    onReadingCompleteRef.current = onReadingComplete;
+  }, [onReadingComplete]);
+
   const handleMeasurement = useCallback((event: Event) => {
     const characteristic = event.target as any;
     const value = characteristic.value;
@@ -106,6 +117,12 @@ export function useBluetooth() {
 
       setCurrentReading(fullReading);
       saveReading(fullReading);
+      
+      // Call the callback for Health Connect sync
+      if (onReadingCompleteRef.current) {
+        onReadingCompleteRef.current(fullReading);
+      }
+      
       setDeviceState(prev => ({ ...prev, isMeasuring: false }));
       setInflationPressure(0);
     } else if (reading && reading.systolic) {

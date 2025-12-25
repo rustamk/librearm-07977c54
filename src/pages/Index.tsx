@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -8,9 +9,27 @@ import { ReadingHistory } from '@/components/ReadingHistory';
 import { MeasureButton } from '@/components/MeasureButton';
 import { HealthConnectCard } from '@/components/HealthConnectCard';
 import { useBluetooth } from '@/hooks/useBluetooth';
+import { useHealthConnect } from '@/hooks/useHealthConnect';
 import { Helmet } from 'react-helmet-async';
+import { toast } from 'sonner';
+import type { BloodPressureReading } from '@/lib/bluetooth';
 
 const Index = () => {
+  const { syncReading, syncEnabled, isAvailable, hasPermissions } = useHealthConnect();
+
+  // Callback for when a reading completes - auto-sync to Health Connect
+  const handleReadingComplete = useCallback(async (reading: BloodPressureReading) => {
+    if (isAvailable && hasPermissions && syncEnabled) {
+      const success = await syncReading(reading);
+      if (success) {
+        toast.success('Synced to Health Connect', {
+          description: `${reading.systolic}/${reading.diastolic} mmHg`,
+          duration: 3000,
+        });
+      }
+    }
+  }, [syncReading, syncEnabled, isAvailable, hasPermissions]);
+
   const {
     deviceState,
     currentReading,
@@ -19,7 +38,7 @@ const Index = () => {
     disconnect,
     startMeasurement,
     stopMeasurement,
-  } = useBluetooth();
+  } = useBluetooth({ onReadingComplete: handleReadingComplete });
 
   return (
     <>
