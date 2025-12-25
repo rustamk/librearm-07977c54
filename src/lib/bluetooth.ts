@@ -119,9 +119,21 @@ export function isWebBluetoothAvailable(): boolean {
 // Storage key for readings
 export const READINGS_STORAGE_KEY = 'librearm_readings';
 
-// Save reading to local storage
+// Save reading to local storage (with deduplication)
 export function saveReading(reading: BloodPressureReading): void {
   const existing = getStoredReadings();
+  
+  // Check for duplicate (same timestamp or very close readings within 5 seconds)
+  const isDuplicate = existing.some(r => {
+    const timeDiff = Math.abs(new Date(r.timestamp).getTime() - new Date(reading.timestamp).getTime());
+    return timeDiff < 5000 && r.systolic === reading.systolic && r.diastolic === reading.diastolic;
+  });
+  
+  if (isDuplicate) {
+    console.log('Duplicate reading detected, skipping save');
+    return;
+  }
+  
   existing.unshift(reading);
   // Keep last 100 readings
   const trimmed = existing.slice(0, 100);
