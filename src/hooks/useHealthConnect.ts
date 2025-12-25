@@ -10,7 +10,7 @@ import {
   isAndroid,
   type HealthConnectStatus,
 } from '@/lib/healthConnect';
-import type { BloodPressureReading } from '@/lib/bluetooth';
+import { type BloodPressureReading, markReadingAsSynced } from '@/lib/bluetooth';
 
 export interface UseHealthConnectReturn {
   /** Health Connect availability status */
@@ -93,7 +93,10 @@ export function useHealthConnect(): UseHealthConnectReturn {
 
     try {
       const success = await writeBloodPressureToHealthConnect(reading);
-      if (!success) {
+      if (success) {
+        // Mark the reading as synced in local storage
+        markReadingAsSynced(reading.timestamp);
+      } else {
         setSyncError('Failed to sync reading');
       }
       return success;
