@@ -12,6 +12,20 @@ import {
   isWebBluetoothAvailable,
   saveReading,
 } from '@/lib/bluetooth';
+import {
+  isNativeApp,
+  initializeBle,
+  isBleAvailable,
+  scanForDevices,
+  stopScan,
+  connectToDevice,
+  disconnectDevice,
+  subscribeToMeasurements,
+  unsubscribeFromMeasurements,
+  writeControlCommand,
+  getConnectedDevice,
+} from '@/lib/nativeBluetooth';
+import type { BleDevice } from '@capacitor-community/bluetooth-le';
 
 const CONNECTION_TIMEOUT = 30000; // 30 seconds
 const MEASUREMENT_TIMEOUT = 120000; // 2 minutes for measurement
@@ -33,75 +47,34 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
 
   const [currentReading, setCurrentReading] = useState<BloodPressureReading | null>(null);
   const [inflationPressure, setInflationPressure] = useState<number>(0);
+  const [isNative] = useState(() => isNativeApp());
 
-  // Using any for Web Bluetooth types as they're not in standard TypeScript lib
+  // Refs for Web Bluetooth
   const deviceRef = useRef<any>(null);
   const measurementCharRef = useRef<any>(null);
   const controlCharRef = useRef<any>(null);
+  
+  // Refs for Native BLE
+  const nativeDeviceIdRef = useRef<string | null>(null);
+  
+  // Shared refs
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measurementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onReadingCompleteRef = useRef(onReadingComplete);
+
+  useEffect(() => {
+    onReadingCompleteRef.current = onReadingComplete;
+  }, [onReadingComplete]);
 
   const clearError = useCallback(() => {
     setDeviceState(prev => ({ ...prev, error: null }));
   }, []);
 
-  const disconnect = useCallback(async () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    if (measurementTimeoutRef.current) {
-      clearTimeout(measurementTimeoutRef.current);
-    }
-
-    if (measurementCharRef.current) {
-      try {
-        await measurementCharRef.current.stopNotifications();
-      } catch (e) {
-        console.log('Error stopping notifications:', e);
-      }
-    }
-
-    if (deviceRef.current?.gatt?.connected) {
-      deviceRef.current.gatt.disconnect();
-    }
-
-    deviceRef.current = null;
-    measurementCharRef.current = null;
-    controlCharRef.current = null;
-
-    setDeviceState({
-      isConnected: false,
-      isConnecting: false,
-      isScanning: false,
-      isMeasuring: false,
-      deviceName: null,
-      error: null,
-    });
-    setCurrentReading(null);
-    setInflationPressure(0);
-  }, []);
-
-  // Store the callback in a ref so it doesn't cause re-renders
-  const onReadingCompleteRef = useRef(onReadingComplete);
-  useEffect(() => {
-    onReadingCompleteRef.current = onReadingComplete;
-  }, [onReadingComplete]);
-
-  const handleMeasurement = useCallback((event: Event) => {
-    const characteristic = event.target as any;
-    const value = characteristic.value;
-    
-    if (!value) return;
-
-    console.log('Received measurement data, length:', value.byteLength);
-
-    const reading = parseBloodPressureMeasurement(value);
-    
+  // Handle measurement data (shared between native and web)
+  const handleMeasurementData = useCallback((reading: Partial<BloodPressureReading>) => {
     if (reading && reading.systolic && reading.diastolic && reading.diastolic > 0) {
-      // Valid complete reading (diastolic > 0 means measurement is done)
       console.log('Valid reading received:', reading);
       
-      // Clear measurement timeout
       if (measurementTimeoutRef.current) {
         clearTimeout(measurementTimeoutRef.current);
       }
@@ -118,7 +91,6 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
       setCurrentReading(fullReading);
       saveReading(fullReading);
       
-      // Call the callback for Health Connect sync
       if (onReadingCompleteRef.current) {
         onReadingCompleteRef.current(fullReading);
       }
@@ -126,17 +98,168 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
       setDeviceState(prev => ({ ...prev, isMeasuring: false }));
       setInflationPressure(0);
     } else if (reading && reading.systolic) {
-      // Intermediate reading during inflation - show cuff pressure
       console.log('Inflation pressure:', reading.systolic);
       setInflationPressure(reading.systolic);
     }
   }, []);
 
-  const connect = useCallback(async () => {
+  // Disconnect function
+  const disconnect = useCallback(async () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (measurementTimeoutRef.current) clearTimeout(measurementTimeoutRef.current);
+
+    if (isNative) {
+      // Native BLE disconnect
+      if (nativeDeviceIdRef.current) {
+        await unsubscribeFromMeasurements(nativeDeviceIdRef.current);
+        await disconnectDevice();
+        nativeDeviceIdRef.current = null;
+      }
+    } else {
+      // Web Bluetooth disconnect
+      if (measurementCharRef.current) {
+        try {
+          await measurementCharRef.current.stopNotifications();
+        } catch (e) {
+          console.log('Error stopping notifications:', e);
+        }
+      }
+
+      if (deviceRef.current?.gatt?.connected) {
+        deviceRef.current.gatt.disconnect();
+      }
+
+      deviceRef.current = null;
+      measurementCharRef.current = null;
+      controlCharRef.current = null;
+    }
+
+    setDeviceState({
+      isConnected: false,
+      isConnecting: false,
+      isScanning: false,
+      isMeasuring: false,
+      deviceName: null,
+      error: null,
+    });
+    setCurrentReading(null);
+    setInflationPressure(0);
+  }, [isNative]);
+
+  // Native BLE connect
+  const connectNative = useCallback(async () => {
+    setDeviceState(prev => ({
+      ...prev,
+      isScanning: true,
+      isConnecting: false,
+      error: null,
+    }));
+
+    try {
+      const available = await isBleAvailable();
+      if (!available) {
+        setDeviceState(prev => ({
+          ...prev,
+          isScanning: false,
+          error: 'Bluetooth is not available or not enabled. Please enable Bluetooth.',
+        }));
+        return;
+      }
+
+      let foundDevice: BleDevice | null = null;
+
+      // Scan for devices
+      await scanForDevices((device) => {
+        if (!foundDevice) {
+          foundDevice = device;
+          console.log('Connecting to first found device:', device.name);
+        }
+      }, 10000);
+
+      // Wait a bit for scan results
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      await stopScan();
+
+      if (!foundDevice) {
+        setDeviceState(prev => ({
+          ...prev,
+          isScanning: false,
+          error: 'No blood pressure device found. Make sure QardioArm is turned on and nearby.',
+        }));
+        return;
+      }
+
+      setDeviceState(prev => ({
+        ...prev,
+        isScanning: false,
+        isConnecting: true,
+        deviceName: foundDevice!.name || 'QardioArm',
+      }));
+
+      // Set connection timeout
+      timeoutRef.current = setTimeout(() => {
+        setDeviceState(prev => ({
+          ...prev,
+          isConnecting: false,
+          error: 'Connection timed out. Please try again.',
+        }));
+        disconnect();
+      }, CONNECTION_TIMEOUT);
+
+      const connected = await connectToDevice(foundDevice.deviceId, () => {
+        setDeviceState(prev => ({
+          ...prev,
+          isConnected: false,
+          isMeasuring: false,
+          error: 'Device disconnected',
+        }));
+      });
+
+      if (!connected) {
+        throw new Error('Failed to connect to device');
+      }
+
+      nativeDeviceIdRef.current = foundDevice.deviceId;
+
+      // Subscribe to measurements
+      await subscribeToMeasurements(foundDevice.deviceId, handleMeasurementData);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      setDeviceState({
+        isConnected: true,
+        isConnecting: false,
+        isScanning: false,
+        isMeasuring: false,
+        deviceName: foundDevice.name || 'QardioArm',
+        error: null,
+      });
+
+    } catch (error: any) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      
+      let errorMessage = 'Failed to connect to device';
+      if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setDeviceState(prev => ({
+        ...prev,
+        isScanning: false,
+        isConnecting: false,
+        error: errorMessage,
+      }));
+    }
+  }, [disconnect, handleMeasurementData]);
+
+  // Web Bluetooth connect
+  const connectWeb = useCallback(async () => {
     if (!isWebBluetoothAvailable()) {
       setDeviceState(prev => ({
         ...prev,
-        error: 'Web Bluetooth is not available. Please use Chrome on Android or a compatible browser.',
+        error: 'Web Bluetooth is not available. Please use the native Android app or Chrome browser.',
       }));
       return;
     }
@@ -149,7 +272,6 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
     }));
 
     try {
-      // Request device with Blood Pressure service
       const bluetooth = (navigator as any).bluetooth;
       const device = await bluetooth.requestDevice({
         filters: [
@@ -169,7 +291,6 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
         deviceName: device.name || 'QardioArm',
       }));
 
-      // Set connection timeout
       timeoutRef.current = setTimeout(() => {
         setDeviceState(prev => ({
           ...prev,
@@ -179,32 +300,33 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
         disconnect();
       }, CONNECTION_TIMEOUT);
 
-      // Connect to GATT server
       const server = await device.gatt?.connect();
       if (!server) throw new Error('Failed to connect to GATT server');
 
-      // Get Blood Pressure service
       const service = await server.getPrimaryService(BLOOD_PRESSURE_SERVICE);
-      
-      // Get Blood Pressure Measurement characteristic
       const measurementChar = await service.getCharacteristic(BLOOD_PRESSURE_MEASUREMENT_CHAR);
       measurementCharRef.current = measurementChar;
 
-      // Try to get the vendor control characteristic
       try {
         const controlChar = await service.getCharacteristic(VENDOR_CONTROL_UUID);
         controlCharRef.current = controlChar;
-        console.log('Control characteristic found - can trigger measurements from app');
+        console.log('Control characteristic found');
       } catch (e) {
-        console.log('Control characteristic not found - device may need physical button');
+        console.log('Control characteristic not found');
         controlCharRef.current = null;
       }
 
-      // Start notifications for measurement characteristic
       await measurementChar.startNotifications();
-      measurementChar.addEventListener('characteristicvaluechanged', handleMeasurement);
+      measurementChar.addEventListener('characteristicvaluechanged', (event: Event) => {
+        const characteristic = event.target as any;
+        const value = characteristic.value;
+        if (!value) return;
+        const reading = parseBloodPressureMeasurement(value);
+        if (reading) {
+          handleMeasurementData(reading);
+        }
+      });
 
-      // Handle disconnect
       device.addEventListener('gattserverdisconnected', () => {
         setDeviceState(prev => ({
           ...prev,
@@ -214,10 +336,7 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
         }));
       });
 
-      // Clear timeout and update state
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
       setDeviceState({
         isConnected: true,
@@ -229,20 +348,15 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
       });
 
     } catch (error: any) {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
       let errorMessage = 'Failed to connect to device';
-      
       if (error.message?.includes('cancelled') || error.message?.includes('cancel')) {
         errorMessage = 'Connection cancelled by user';
-      } else if (error.message?.includes('auth') || error.message?.includes('Authentication')) {
-        errorMessage = 'Authentication failed. Please pair the device in your Bluetooth settings first, then try again.';
-      } else if (error.message?.includes('not found') || error.message?.includes('No device')) {
-        errorMessage = 'Device not found. Make sure QardioArm is turned on and nearby.';
-      } else if (error.message?.includes('denied') || error.message?.includes('permission')) {
-        errorMessage = 'Bluetooth permission denied. Please allow Bluetooth access.';
+      } else if (error.message?.includes('auth')) {
+        errorMessage = 'Authentication failed. Please pair the device first.';
+      } else if (error.message?.includes('not found')) {
+        errorMessage = 'Device not found. Make sure QardioArm is turned on.';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -254,28 +368,44 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
         error: errorMessage,
       }));
     }
-  }, [disconnect, handleMeasurement]);
+  }, [disconnect, handleMeasurementData]);
 
-  const startMeasurement = useCallback(async () => {
-    if (!controlCharRef.current) {
-      setDeviceState(prev => ({
-        ...prev,
-        error: 'Control characteristic not available. Cannot start measurement.',
-      }));
-      return;
+  // Main connect function - chooses native or web
+  const connect = useCallback(async () => {
+    if (isNative) {
+      await connectNative();
+    } else {
+      await connectWeb();
     }
+  }, [isNative, connectNative, connectWeb]);
 
+  // Start measurement
+  const startMeasurement = useCallback(async () => {
     setDeviceState(prev => ({ ...prev, isMeasuring: true, error: null }));
     setCurrentReading(null);
     setInflationPressure(0);
 
     try {
-      // Send start command to QardioArm
-      console.log('Sending start measurement command...');
-      await controlCharRef.current.writeValue(START_MEASUREMENT_COMMAND);
-      console.log('Start command sent successfully');
+      let success = false;
 
-      // Set measurement timeout (2 minutes)
+      if (isNative && nativeDeviceIdRef.current) {
+        success = await writeControlCommand(nativeDeviceIdRef.current, START_MEASUREMENT_COMMAND);
+      } else if (controlCharRef.current) {
+        try {
+          await controlCharRef.current.writeValue(START_MEASUREMENT_COMMAND);
+          success = true;
+        } catch {
+          await controlCharRef.current.writeValueWithoutResponse(START_MEASUREMENT_COMMAND);
+          success = true;
+        }
+      }
+
+      if (!success) {
+        throw new Error('Could not send start command');
+      }
+
+      console.log('Start measurement command sent');
+
       measurementTimeoutRef.current = setTimeout(() => {
         setDeviceState(prev => ({
           ...prev,
@@ -287,46 +417,26 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
 
     } catch (error: any) {
       console.error('Failed to start measurement:', error);
-      
-      // Try writeWithoutResponse as fallback
-      try {
-        console.log('Trying writeWithoutResponse...');
-        await controlCharRef.current.writeValueWithoutResponse(START_MEASUREMENT_COMMAND);
-        console.log('Start command sent via writeWithoutResponse');
-        
-        // Set measurement timeout
-        measurementTimeoutRef.current = setTimeout(() => {
-          setDeviceState(prev => ({
-            ...prev,
-            isMeasuring: false,
-            error: 'Measurement timed out. Please try again.',
-          }));
-          setInflationPressure(0);
-        }, MEASUREMENT_TIMEOUT);
-        
-      } catch (fallbackError: any) {
-        console.error('Fallback also failed:', fallbackError);
-        setDeviceState(prev => ({
-          ...prev,
-          isMeasuring: false,
-          error: `Failed to start measurement: ${error.message || 'Unknown error'}`,
-        }));
-      }
+      setDeviceState(prev => ({
+        ...prev,
+        isMeasuring: false,
+        error: `Failed to start measurement: ${error.message || 'Unknown error'}`,
+      }));
     }
-  }, []);
+  }, [isNative]);
 
+  // Stop measurement
   const stopMeasurement = useCallback(async () => {
     if (measurementTimeoutRef.current) {
       clearTimeout(measurementTimeoutRef.current);
     }
 
-    if (controlCharRef.current) {
+    if (isNative && nativeDeviceIdRef.current) {
+      await writeControlCommand(nativeDeviceIdRef.current, CANCEL_MEASUREMENT_COMMAND);
+    } else if (controlCharRef.current) {
       try {
-        console.log('Sending cancel measurement command...');
         await controlCharRef.current.writeValue(CANCEL_MEASUREMENT_COMMAND);
-        console.log('Cancel command sent successfully');
-      } catch (error) {
-        // Try writeWithoutResponse as fallback
+      } catch {
         try {
           await controlCharRef.current.writeValueWithoutResponse(CANCEL_MEASUREMENT_COMMAND);
         } catch (e) {
@@ -337,7 +447,7 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
 
     setDeviceState(prev => ({ ...prev, isMeasuring: false }));
     setInflationPressure(0);
-  }, []);
+  }, [isNative]);
 
   return {
     deviceState,
@@ -348,5 +458,6 @@ export function useBluetooth(options: UseBluetoothOptions = {}) {
     startMeasurement,
     stopMeasurement,
     clearError,
+    isNative,
   };
 }
