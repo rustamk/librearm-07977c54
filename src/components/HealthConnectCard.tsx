@@ -1,8 +1,14 @@
 import { motion } from 'framer-motion';
-import { Heart, ExternalLink, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Heart, ExternalLink, CheckCircle2, XCircle, Loader2, Smartphone } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { useHealthConnect } from '@/hooks/useHealthConnect';
+
+// Check if running in native Capacitor app
+function isNativeApp(): boolean {
+  return typeof (window as any).Capacitor !== 'undefined' && 
+         (window as any).Capacitor.isNativePlatform?.() === true;
+}
 
 export function HealthConnectCard() {
   const {
@@ -23,7 +29,19 @@ export function HealthConnectCard() {
     return null;
   }
 
+  const isNative = isNativeApp();
+
   const getStatusInfo = () => {
+    // If not running in native app, show browser message
+    if (!isNative) {
+      return {
+        icon: <Smartphone className="h-4 w-4 text-muted-foreground" />,
+        text: 'Requires Android app',
+        color: 'text-muted-foreground',
+        isBrowserMode: true,
+      };
+    }
+
     switch (status) {
       case 'available':
         if (hasPermissions && syncEnabled) {
@@ -59,7 +77,7 @@ export function HealthConnectCard() {
         };
       default:
         return {
-          icon: <Heart className="h-4 w-4 text-muted-foreground" />,
+          icon: <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />,
           text: 'Checking Health Connect...',
           color: 'text-muted-foreground',
         };
@@ -106,8 +124,17 @@ export function HealthConnectCard() {
         <p className="mt-2 text-xs text-destructive">{syncError}</p>
       )}
 
+      {/* Browser mode message */}
+      {(statusInfo as any).isBrowserMode && (
+        <div className="mt-3">
+          <p className="text-xs text-muted-foreground">
+            Health Connect sync is available when using the native Android app. Build and install the app on your Android device to sync readings to Samsung Health or Google Fit.
+          </p>
+        </div>
+      )}
+
       {/* Setup prompt for available but no permissions */}
-      {isAvailable && !hasPermissions && (
+      {isNative && isAvailable && !hasPermissions && (
         <div className="mt-3 flex flex-col gap-2">
           <p className="text-xs text-muted-foreground">
             Sync blood pressure readings to Samsung Health or Google Fit
