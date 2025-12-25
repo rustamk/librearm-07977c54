@@ -96,33 +96,6 @@ export default function About() {
               </section>
 
               <section>
-                <h2 className="mb-3 text-xl font-semibold">Developer</h2>
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                      <span className="text-lg font-bold text-primary">PT</span>
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-foreground">Paul Taylor</h3>
-                      <a 
-                        href="https://ptylr.com" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        ptylr.com
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    Originally developed as an iOS app, LibreArm has been rebuilt as a cross-platform 
-                    application to help more people track their blood pressure without sacrificing privacy.
-                  </p>
-                </div>
-              </section>
-
-              <section>
                 <h2 className="mb-3 text-xl font-semibold">Open Source</h2>
                 <p className="mb-4 text-muted-foreground">
                   LibreArm is open source software. You can view the complete source code, report issues, 

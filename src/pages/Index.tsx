@@ -6,6 +6,7 @@ import { BluetoothStatus } from '@/components/BluetoothStatus';
 import { BluetoothWarning } from '@/components/BluetoothWarning';
 import { ReadingCard } from '@/components/ReadingCard';
 import { ReadingHistory } from '@/components/ReadingHistory';
+import { BPTrendsChart } from '@/components/BPTrendsChart';
 import { MeasureButton } from '@/components/MeasureButton';
 import { HealthConnectCard } from '@/components/HealthConnectCard';
 import { useBluetooth } from '@/hooks/useBluetooth';
@@ -88,6 +89,9 @@ const Index = () => {
 
             {/* Health Connect Sync */}
             <HealthConnectCard />
+
+            {/* BP Trends Chart */}
+            <BPTrendsChart />
 
             {/* Reading History */}
             <ReadingHistory />
